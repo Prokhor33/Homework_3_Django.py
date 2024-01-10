@@ -1,38 +1,47 @@
-from django.shortcuts import render
-from django.http import HttpResponse
 import logging
-
-logger = logging.getLogger(__name__)                # переменная для логирования
-
-def main(request):
-    page_main = """
-        <div>
-            <h1>Главная страница</h1>
-            <h2>Домашнее задание к уроку №2:</h2>
-            <p>Создайте пару представлений в вашем первом приложении:</p>
-            <ul>
-                <li>главная</li>
-                <li>о себе</li>
-            </ul>
-            <p>Внутри каждого представления должна быть переменная html — многострочный текст с HTML-вёрсткой и данными о вашем первом Django-сайте и о вас.</p>
-            <p>Сохраняйте в логи данные о посещении страниц.</p>
-        </div>
-        <form action='http://127.0.0.1:8000/about_me/' target="_blank">
-            <button>О себе</button>
-        </form>
-        <br>
-        <footer>
-            <div>
-                <p> Контакты: </p>
-            </div>
-        </footer>
-        """
-    logger.info(f'Страница "Главная" успешно открыта')
-    return HttpResponse(page_main)
+from django.shortcuts import render, get_object_or_404
+from django.core.files.storage import FileSystemStorage
+# from hw_les_02.models import Customer, Order, Product
+from datetime import datetime, timedelta
+# from .forms import Product
 
 
-def about_me(request):
+logger = logging.getLogger(__name__)
 
-    logger.info(f'Страница "О себе" успешно открыта')
-    #return HttpResponse(page_about_me)
-    return render(request, 'about_me_app/about_me.html')
+
+def customer_prod(request, customer_id, order_delta):
+    customer = get_object_or_404(Customer, pk=customer_id)
+    delta_or = datetime.today()-timedelta(days=order_delta) # задаем с какого периода (даты) нам получить данные
+    orders = Order.objects.filter(customer=customer).filter(date_ordered__gt=delta_or) # первый фильтр получает пользователя, второй - спецификатор позволяет найти объекты начиная с периода заданного выше
+    temp_prod = [] # по заданию нам нужно чтобы "Товары в списке не должны повторятся" поэтому применяю блок с 10 по 14 строку
+    for order in orders:
+        for product in order.products.all():
+            if product not in temp_prod:
+                temp_prod.append(product)
+    context = {"title": f"Заказы {customer.name}",
+               "customer": customer,
+               "orders": orders,
+               "products": temp_prod,
+               "delta_or": delta_or}
+    return render(request, "hw_les_02/index.html", context)
+
+def product_form(request):
+    if request.method == 'POST':
+        form = Product(request.POST, request.FILES)
+        if form.is_valid():
+            name = form.cleaned_data['name']
+            product = Product.objects.filter(name=name).first()
+            product.description = form.cleaned_data['description']
+            product.price = form.cleaned_data['price']
+            product.quantity = form.cleaned_data['quantity']
+            product.date_add = form.cleaned_data['date_add']
+            image = request.FILES['image'] # image = request.cleaned_data['image'] если так прошем появляется ошибка AttributeError: 'WSGIRequest' object has no attribute 'cleaned_data'
+            fs = FileSystemStorage()
+            fs.save(image.name, image)
+            product.image = image
+            product.save()
+            logger.info(f'Обновили {product.name}')
+
+    else:
+        form = Product()
+    return render(request, 'hw_les_02/update_product_forms.html', {'form': form})

@@ -1,8 +1,7 @@
 from django.urls import path
-from . import views
-
+from .views import customer_prod, product_form
 
 urlpatterns = [
-    path('main/', views.main, name='main'),
-    path('about_me/', views.about_me, name='about_me'),
+    path('customer/<int:customer_id>/<int:order_delta>', customer_prod, name='customer_prod'),
+    path('product/', product_form, name='product_form'),
 ]
